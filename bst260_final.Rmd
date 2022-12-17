@@ -1,0 +1,267 @@
+---
+title: "bst260_final"
+author: "Ellen Chen"
+date: "12/16/2022"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+The dataset used in this project was from [Kaggle](https://www.kaggle.com/datasets/shrutipandit707/carpriceprediction). The data includes the price and features of vehicles, including company, car types, carlength, carwidth, symboling, citympg, highwaymph, etc. According to the United States of Environmenal Protection Agency (EPA), for gasoline vehicles, the label shows city, highway, and combined MPG values. The conbined MPG, which will refer as "Fuel Economy" in this project, is calculated by weighting the city value by $55\%$ and the highway value by $45\%$.
+$$ \text{Fuel Economy} = 0.55 \times \text{citympg} + 0.45 \times \text{highwaympg}$$
+Since the EPA did not state how to calculate fuel economy for diesel vehicles,  I will filter diesel vehicles out of the data for the analysis. The category of symboling was used to indicate the degree of safety. Cars are initially assigned a risk factor symbol associated with its price. The symbol is then adjusted by the safe/risky conditions. A value of $+3$ suggusts the auto is risky while $-3$ suggests the auto is safe.
+
+By navigating the data, the distribution of price is right-skewed. Most of the prices that had been reported were lower than $15$k (Figure 1). The top 3 companies that had been reported were Toyota, Nissan, and Mazda (Figure 2). The most two commonly reported car types were hatchback and sedan (Figure 3). The four companies having vehicles with prices higher than $30$k were BMW, Buick, Jaguar, and Porsche. Considering car types, all the wagons were reported with prices lower than $20$k, but the other 4 types did not show a clear pattern with regard to price (Figure 4). 
+
+
+# Results
+## Primary Analysis 
+To analyze if fuel economy is associated with the price of vehicles, a simple linear regression model was firstly created, considered the fuel economy as the only predictor. 
+
+The fitted model is 
+$$ \hat{Y}_{price} = 37.98 - 0.92X_{fuel.economy}$$ 
+The adjusted R-squared for the simple linear regression model is $0.536$.
+
+For each one-unit increase in fuel economy, it is expected to have a $-0.92$ decrease in price(k) on average, with $p < 0.001$ (Table 1). The fuel economy was shown to be negatively correlated with the price. However, the plot suggests a quadratic relationship between price and fuel economy (Figure 5). 
+
+I then introduced a quadratic term into the model, the fitted model was modified to be 
+$$\hat{Y}_{price} = 80.05 - 3.96X_{fuel.economy} - 0.052X^2_{fuel.economy}$$ 
+The association between fuel economy and price is nonlinear, because the quadratic term has a non-zero slope with $p < 0.001$ (Table 2). The quadratic curve fits better compare to the linear line (Figure 6 and Figure 7). However, neither car type nor symboling showed a clear pattern considering the relationship between fuel economy and price. 
+
+In addition, the adjusted R-squared for the quadratic model is $0.701$ which is greater the the value of the adjusted R-squared for the simple model. This also indicates that the introduction of the quadratic term improves the model mroe than would be expected by chance.
+
+## Secondary Analysis
+The secondary analysis aims to study the the association between car types and the safety of vehicles. Association tests, including chi-square analysis, odds ratio, and confidence interval, were utilized to analyze if the car type is associated with safety. Considering the sample size and the distribution of the number of car types in the data, I used a subset of the original data that only contains two car types, hatchback and sedan, which were the best sellers among the five car types. 
+
+Based on the result of the chi-square analysis, car types is associated with the safety, with $p < 0.001$. The bar plot also showed a difference in the proportion of safe/risky cars between hatchback and sedan, which was consistent with the result of chi-square analysis (Figure 8). 
+
+Next, the odds ratio was calculated to quantify the association between car types and safety. The probability of being safe was divided by the probability of being risky for both hatchback and sedan. The odds of sedan was then divided by the odds of hatchback for the calculation of odds ratio. The result demonstrated that sedan is $9.70$ more likely to be safe compared to hatchbacks, with $95\%$ CI [$4.23$, $22.22$]. 
+
+
+# Conclusion
+The fuel economy is found to be associated with the price of vehicles by regression analysis. By adding the quadratic term, the regression model fits better to the original data. However, further analysis needs to carefully measure if the quadratic model performs well compared to the simple linear regression model and how much it improves from the simple model. Confounders and effect modifiers should also be considered and measured in the model.
+
+Taking advantage of association tests, car type is found to associated with the degree of safety of vehicles. However, the analysis only included hatchback and sedan. Further research could include more car types and probably other ways to measure the safety of vehicles besides symboling. 
+
+
+# References
+[EPA: Text Version of the Gasoline Label](https://www.epa.gov/fueleconomy/text-version-gasoline-label#:~:text=Fuel%20Economy&text=The%20Combined%20MPG%20value%20is,the%20Highway%20value%20by%2045%25.)
+
+[Kaggle Database](https://www.kaggle.com/datasets/shrutipandit707/carpriceprediction)
+
+
+# Appendix
+
+```{r library, message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(ggridges)
+library(RColorBrewer)
+library(stats)
+library(caret)
+library(HistData)
+library(randomForest)
+```
+
+```{r load data, include=FALSE}
+dat = read.csv("/Users/ellen/Desktop/dataset/CarPrice_Assignment.csv")
+# head(dat)
+```
+
+```{r data wrangling, include=FALSE}
+car = dat %>% mutate(company = str_replace(CarName, " .*", "")) %>% 
+  mutate(symboling_group = case_when(symboling > 0 ~ "risky", T ~ "safe")) %>% 
+  mutate(price = price/1000) %>% 
+  filter(fueltype == "gas")
+#head(car)
+#unique(car$company)
+
+# wrangling with the names of companies
+car$company[car$company == "maxda"] = "mazda"
+car$company[car$company == "Nissan"] = "nissan"
+car$company[car$company == "porcshce"] = "porsche"
+car$company[car$company == "toyouta"] = "toyota"
+car$company[car$company == "vokswagen" | car$company == "vw"] = "volkswagen"
+unique(car$company)
+
+names(car)
+head(car)
+```
+
+```{r data visualization, echo=FALSE}
+# histogram: car price
+car %>% 
+  ggplot(aes(price)) +
+  geom_histogram(binwidth = 1, fill = "#F2CCA6", color = "black") +
+  xlab("price (k)") +
+  labs(title = "Figure 1: The distribution of price") +
+  theme_bw() +
+  theme(axis.line = element_line(color='black'),
+        plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        #panel.grid.minor = element_blank(),
+        panel.border = element_blank())
+
+# histogram: company
+car %>% group_by(company) %>% 
+  summarise(count = n()) %>% 
+  ggplot(aes(x = reorder(company, (-count)), y = count, fill = company)) +
+  geom_bar(stat = "identity") +
+  xlab("company") +
+  labs(title = "Figure 2: The distribution of company") +
+  scale_color_brewer(palette = "Set3") +  
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(legend.position="none")
+
+# histogram: car type
+car %>% group_by(carbody) %>% 
+  summarise(count = n()) %>% 
+  ggplot(aes(x = reorder(carbody, (-count)), y = count, fill = carbody)) +
+  geom_bar(stat = "identity") +
+  xlab("car type") +
+  labs(title = "Figure 3: The distribution of car types") +
+  scale_color_brewer(palette = "Set3") +  
+  theme_bw() +
+  theme(legend.position="none")
+
+# price vs. company
+car %>% 
+  ggplot(aes(x = company, y = price, color = carbody)) +
+  geom_point() + 
+  labs(title = "Figure 4: Price vs. Company", color = "car type",
+       x = "company",
+       y = "price (k)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r regression, echo=FALSE}
+car = car %>% mutate(fueleconomy = 0.55*citympg + 0.45*highwaympg)
+
+# Model 1: Simple linear regression model
+lm.simple = lm(price ~ fueleconomy, data = car)
+paste("Table 1 refers to the following output of the simple linear regression model.")
+summary(lm.simple)
+car %>% ggplot(aes(x = fueleconomy, y = price)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Figure 5: The simple linear regression model (price ~ fueleconomy)",
+       x = "fueleconomy", 
+       y = "price(k)")
+
+# Model 2: Quadratic model
+lm.quad = lm(price ~ fueleconomy + I(fueleconomy^2), data = car)
+paste("Table 2 refers to the following output of the quadratic model.")
+summary(lm.quad)
+car %>% ggplot(aes(x = fueleconomy, y = price)) +
+  geom_point(aes(color = carbody)) +
+  geom_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1, color = "black") +
+  labs(title = "Figure 6: The quadratic model, color = car type",
+       x = "fueleconomy", 
+       y = "price(k)")
+car %>% ggplot(aes(x = fueleconomy, y = price)) +
+  geom_point(aes(color = symboling)) +
+  geom_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1, color = "black") +
+  labs(title = "Figure 7: The quadratic model, color = symboling",
+       x = "fueleconomy", 
+       y = "price(k)")
+
+```
+
+```{r association test, echo=FALSE}
+# For Association Test, I will use a subset of the original data that the "carbody" only contains hatchback and sedan
+car.at = car %>% filter(carbody %in% c("hatchback", "sedan")) %>% 
+  select(symboling, symboling_group, carbody, fueleconomy, price)
+#head(car.at)
+
+# 1. chi-square 
+table = car.at %>% group_by(symboling_group) %>% 
+  summarise(hatchback = sum(carbody == "hatchback"), sedan = sum(carbody == "sedan"))
+#table
+chisq_test = table %>% select(-symboling_group) %>% chisq.test()
+paste0("The p-value fo the Chi-square analysis is ", chisq_test$p.value, sep = "")
+
+# visualize "car type" ~ "safety"
+car.at %>% group_by(carbody) %>% 
+  summarise(risky = sum(symboling_group == "risky"), safe = sum(symboling_group == "safe")) %>% 
+  pivot_longer(col = c("risky", "safe"),
+               names_to = "safety",
+               values_to = "number") %>% 
+  ggplot(aes(x = carbody, y = number, fill = safety)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=c("#F6A09A", "#BCCF90")) +
+  theme_bw() +
+  labs(title = "Figure 8")
+
+# 2. The Odds Ratio: safe/risky
+# for hatchback
+ratio_hatchback = with(table, (hatchback[2]/sum(hatchback)) / (hatchback[1]/sum(hatchback)))
+paste0("The odds of hatchback is ", ratio_hatchback, sep = "")
+# for sedan
+ratio_sedan = with(table, (sedan[2]/sum(sedan)) / (sedan[1]/sum(sedan)))
+paste0("The odds of sedam is ", ratio_sedan, sep = "")
+# how many times larger are the odds for sedan than for hatchback?
+paste0("The odds ratio is ", ratio_sedan/ratio_hatchback, sep = "")
+
+# 3. confidence interval
+log_or = log(ratio_sedan/ratio_hatchback)
+se = table %>%  select(-symboling_group) %>% 
+  summarize(se = sqrt(sum(1/sedan) + sum(1/hatchback))) %>% 
+  pull(se)
+ci = log_or + c(-1,1) * qnorm(0.975) * se
+paste0("The lower bond of 95% confidence interval is ", exp(ci)[1], sep = "")
+paste0("The upper bond of 95% confidence interval is ", exp(ci)[2], sep = "")
+
+```
+
+```{r smoothing, eval=FALSE, include=FALSE}
+# Analysis 3: Smoothing
+# introduce a new feature: fuel economy
+# price vs. fuel economy 
+car %>% ggplot(aes(x = fueleconomy, y = price)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  labs(title = "price vs. fuel economy",
+       x = "fueleconomy", 
+       y = "price(k)")
+
+# smoothing 1: normal kernel
+span = 7
+kernel = with(car, ksmooth(fueleconomy, price, kernel = "normal", bandwidth = span))
+car %>% mutate(smooth = kernel$y) %>% 
+  ggplot(aes(fueleconomy, price)) +
+  geom_point(size = 3, alpha = .5, color = "grey") + 
+  geom_line(aes(fueleconomy, smooth, color = "red")) +
+  labs(title = "kernel (normal): price vs. fuel economy",
+       x = "fueleconomy", 
+       y = "price(k)")
+
+# smoothing 2: LOESS
+# default
+car %>%  ggplot(aes(fueleconomy, price)) +
+  geom_point() + 
+  geom_smooth(method = loess) +
+   labs(title = "LOESS (default): price vs. fuel economy",
+       x = "fueleconomy", 
+       y = "price(k)")
+# change parameters
+car %>%  ggplot(aes(fueleconomy, price)) +
+  geom_point() + 
+  geom_smooth(method = loess, method.args = list(span = 0.15, degree = 1)) +
+  labs(title = "LOESS (span = 0.15, degree = 1): price vs. fuel economy",
+       x = "fueleconomy", 
+       y = "price(k)")
+
+```
+
+
